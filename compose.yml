@@ -1,0 +1,97 @@
+services:
+  ###################################
+  # MinIO (S3-compatible storage)
+  ###################################
+  minio:
+    image: minio/minio
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BROWSER: "on"
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # Web Console
+    volumes:
+      - minio_data:/data
+    networks:
+      - aws-local
+    restart: unless-stopped
+
+  ###################################
+  # DynamoDB Local (NoSQL DB)
+  ###################################
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: dynamodb-local
+    command: -jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data
+    ports:
+      - "8000:8000"
+    volumes:
+      - dynamodb_data:/home/dynamodblocal/data
+    networks:
+      - aws-local
+    restart: unless-stopped
+
+  ###################################
+  # LocalStack (AWS services emulator)
+  ###################################
+  localstack:
+    container_name: ${LOCALSTACK_DOCKER_NAME}
+    image: localstack/localstack
+    ports:
+      - "4566:4566"       # LocalStack Gateway
+      - "4510-4559:4510-4559"
+    environment:
+      - DEBUG=${DEBUG}
+    volumes:
+      - "${LOCALSTACK_VOLUME_DIR}:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - aws-local
+    restart: unless-stopped
+
+  ###################################
+  # Vault (Secret Management)
+  ###################################
+  vault:
+    image: hashicorp/vault:latest
+    container_name: vault
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_ROOT_TOKEN_ID}
+      VAULT_DEV_LISTEN_ADDRESS: ${VAULT_DEV_LISTEN_ADDRESS}
+    cap_add:
+      - IPC_LOCK
+    networks:
+      - aws-local
+    restart: unless-stopped
+
+###################################
+# Networks & Volumes
+###################################
+networks:
+  aws-local:
+    driver: bridge
+
+volumes:
+  minio_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${MINIO_VOLUME_DIR}
+      o: bind
+  dynamodb_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DYNAMODB_VOLUME_DIR}
+      o: bind
+  localstack_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${LOCALSTACK_VOLUME_DIR}
+      o: bind
